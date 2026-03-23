@@ -1,0 +1,5 @@
+/* Fallback web fonts for design system typography */
+/* Primary: 'Test Tiempos Text' (serif headings) — substituted with Playfair Display */
+/* Primary: 'Styrene B LC' (sans-serif body) — substituted with Inter */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
