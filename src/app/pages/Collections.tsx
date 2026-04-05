@@ -1,342 +1,452 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { FolderOpen, Plus, Archive, ArrowUpRight, BarChart2, AlertTriangle } from 'lucide-react';
-import { MOCK_COMPANIES, MOCK_COLLECTIONS, getRiskColor, type RiskTier } from '../data/mockData';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Archive, BarChart2, FolderOpen, RefreshCcw } from 'lucide-react';
 import { RiskBadge } from '../components/RiskBadge';
+import { useBookmarks } from '../bookmarks/BookmarksContext';
+import { getRiskColor, type RiskTier } from '../data/mockData';
+import { normalizeRiskTier, type Bookmark, type BookmarkCompanyData } from '../lib/bookmarks';
 
 const COLLECTION_COLORS = ['#BF4D43', '#D97757', '#207FDE', '#9B87F5', '#4CAF74', '#D4A017'];
 
-export function Collections() {
-  const navigate = useNavigate();
-  const [collections, setCollections] = useState(MOCK_COLLECTIONS);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newCol, setNewCol] = useState({ name: '', description: '', color: COLLECTION_COLORS[0] });
-  const [expandedCol, setExpandedCol] = useState<string | null>(collections[0]?.id ?? null);
+function getBookmarkColor(id: number) {
+  return COLLECTION_COLORS[id % COLLECTION_COLORS.length];
+}
 
-  const handleCreate = () => {
-    if (!newCol.name) return;
-    setCollections(prev => [...prev, {
-      id: `col-${Date.now()}`,
-      name: newCol.name,
-      description: newCol.description,
-      color: newCol.color,
-      status: 'active',
-      companyIds: [],
-      createdAt: '2026-03-23',
-    }]);
-    setNewCol({ name: '', description: '', color: COLLECTION_COLORS[0] });
-    setShowCreate(false);
-  };
+function getAverageTier(score: number): RiskTier {
+  if (score >= 81) return 'critical';
+  if (score >= 61) return 'high';
+  if (score >= 31) return 'medium';
+  return 'low';
+}
 
-  const handleArchive = (id: string) => {
-    setCollections(prev => prev.map(c => c.id === id ? { ...c, status: 'archived' as const } : c));
-  };
+function formatMethods(methods: string[]) {
+  if (methods.length === 0) {
+    return 'No methods listed';
+  }
 
-  const active = collections.filter(c => c.status === 'active');
-  const archived = collections.filter(c => c.status === 'archived');
+  return methods
+    .map((method) =>
+      method
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    )
+    .join(', ');
+}
+
+function formatRevenue(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function CollectionCompanyRow({
+  company,
+}: {
+  company: BookmarkCompanyData;
+}) {
+  const tier = normalizeRiskTier(company.riskTier);
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <h1 style={{ fontFamily: 'var(--text-h1-family)', fontSize: 'var(--text-h1-size)', color: 'var(--foreground)' }}>
-            Collections
-          </h1>
-          <p style={{ color: 'var(--muted-foreground)', marginTop: '4px' }}>
-            Named case folders for organizing watchlist companies into investigation batches
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate(s => !s)}
-          className="flex items-center gap-2 px-3 py-2 rounded shrink-0"
-          style={{ background: 'var(--primary)', borderRadius: 'var(--radius)', color: 'white' }}
+    <div
+      className="flex items-start gap-3 border-b px-4 py-3 md:gap-4"
+      style={{ borderColor: 'var(--border)' }}
+    >
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded"
+        style={{
+          background: `${getRiskColor(tier)}22`,
+          border: `1px solid ${getRiskColor(tier)}44`,
+          borderRadius: 'var(--radius)',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--text-p-family)',
+            fontSize: '13px',
+            color: getRiskColor(tier),
+            fontWeight: 500,
+          }}
         >
-          <Plus size={14} />
-          <span>New Collection</span>
-        </button>
+          {company.riskScore}
+        </span>
       </div>
 
-      {/* Create Form */}
-      {showCreate && (
-        <div
-          className="p-4 rounded-xl border space-y-3"
-          style={{ background: 'var(--card)', borderColor: 'var(--accent)', borderRadius: 'var(--radius-card)' }}
-        >
-          <h4 style={{ fontFamily: 'var(--text-h4-family)', fontSize: 'var(--text-h4-size)', color: 'var(--foreground)' }}>
-            Create New Collection
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="caption block mb-1" style={{ color: 'var(--muted-foreground)' }}>Collection Name *</label>
-              <input
-                value={newCol.name}
-                onChange={e => setNewCol(n => ({ ...n, name: e.target.value }))}
-                placeholder="e.g. Q2 2026 Priority Cases"
-                className="w-full px-3 py-2 rounded outline-none"
-                style={{ background: 'var(--input-background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', color: 'var(--foreground)' }}
-              />
-            </div>
-            <div>
-              <label className="caption block mb-1" style={{ color: 'var(--muted-foreground)' }}>Description</label>
-              <input
-                value={newCol.description}
-                onChange={e => setNewCol(n => ({ ...n, description: e.target.value }))}
-                placeholder="Optional context note"
-                className="w-full px-3 py-2 rounded outline-none"
-                style={{ background: 'var(--input-background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', color: 'var(--foreground)' }}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="caption block mb-1.5" style={{ color: 'var(--muted-foreground)' }}>Color Label</label>
-            <div className="flex gap-2">
-              {COLLECTION_COLORS.map(color => (
-                <button
-                  key={color}
-                  onClick={() => setNewCol(n => ({ ...n, color }))}
-                  className="w-7 h-7 rounded-full transition-transform"
-                  style={{
-                    background: color,
-                    transform: newCol.color === color ? 'scale(1.2)' : 'scale(1)',
-                    outline: newCol.color === color ? `2px solid ${color}` : 'none',
-                    outlineOffset: '2px',
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setShowCreate(false)}
-              className="caption px-3 py-1.5 rounded"
-              style={{ background: 'var(--muted)', borderRadius: 'var(--radius)', color: 'var(--muted-foreground)' }}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            style={{
+              fontFamily: 'var(--text-p-family)',
+              fontSize: '14px',
+              color: 'var(--foreground)',
+              fontWeight: 500,
+            }}
+          >
+            {company.companyNickname}
+          </span>
+          <RiskBadge tier={tier} size="sm" />
+        </div>
+        <div className="caption mt-0.5 truncate" style={{ color: 'var(--muted-foreground)' }}>
+          {company.companyName} · {company.sector}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <span
+            className="caption rounded px-2 py-1"
+            style={{ background: 'var(--input-background)', color: 'var(--muted-foreground)' }}
+          >
+            Revenue {formatRevenue(company.revenue)}
+          </span>
+          <span
+            className="caption rounded px-2 py-1"
+            style={{ background: 'var(--input-background)', color: 'var(--muted-foreground)' }}
+          >
+            ETR {company.etr_score.toFixed(1)}
+          </span>
+          <span
+            className="caption rounded px-2 py-1"
+            style={{ background: 'var(--input-background)', color: 'var(--muted-foreground)' }}
+          >
+            Debt {company.debt_score.toFixed(1)}
+          </span>
+        </div>
+      </div>
+
+      <div className="hidden max-w-64 text-right md:block">
+        <div className="caption" style={{ color: 'var(--muted-foreground)' }}>
+          Methods
+        </div>
+        <div className="caption mt-1" style={{ color: 'var(--foreground)' }}>
+          {formatMethods(company.methods)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CollectionCard({
+  bookmark,
+  expanded,
+  updating,
+  archiveLabel,
+  onToggle,
+  onStatusChange,
+}: {
+  bookmark: Bookmark;
+  expanded: boolean;
+  updating: boolean;
+  archiveLabel: 'Archive Collection' | 'Restore';
+  onToggle: () => void;
+  onStatusChange: () => Promise<void>;
+}) {
+  const companies = bookmark.companies.map((entry) => entry.company);
+  const averageRisk = companies.length
+    ? Math.round(companies.reduce((sum, company) => sum + company.riskScore, 0) / companies.length)
+    : 0;
+  const averageTier = getAverageTier(averageRisk);
+  const topRiskCompany = [...companies].sort((left, right) => right.riskScore - left.riskScore)[0];
+  const color = getBookmarkColor(bookmark.id);
+
+  return (
+    <div
+      className="overflow-hidden rounded-xl border"
+      style={{ background: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius-card)' }}
+    >
+      <button onClick={onToggle} className="flex w-full items-center justify-between p-4 text-left">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="h-3 w-3 shrink-0 rounded-full" style={{ background: color }} />
+          <div className="min-w-0">
+            <div
+              style={{
+                fontFamily: 'var(--text-h3-family)',
+                fontSize: 'var(--text-h3-size)',
+                color: 'var(--foreground)',
+              }}
             >
-              Cancel
+              {bookmark.name}
+            </div>
+            <div className="caption mt-0.5 truncate" style={{ color: 'var(--muted-foreground)' }}>
+              {bookmark.description || bookmark.notes || `Updated ${formatDate(bookmark.updatedAt)}`}
+            </div>
+          </div>
+        </div>
+
+        <div className="mr-4 hidden shrink-0 items-center gap-4 sm:flex md:gap-6">
+          <div className="text-right">
+            <div className="caption" style={{ color: 'var(--muted-foreground)' }}>
+              Companies
+            </div>
+            <div style={{ color: 'var(--foreground)', fontWeight: 500 }}>{companies.length}</div>
+          </div>
+          <div className="text-right">
+            <div className="caption" style={{ color: 'var(--muted-foreground)' }}>
+              Avg Risk
+            </div>
+            <div style={{ color: getRiskColor(averageTier), fontWeight: 500 }}>
+              {averageRisk || '—'}
+            </div>
+          </div>
+          <div className="hidden text-right md:block">
+            <div className="caption" style={{ color: 'var(--muted-foreground)' }}>
+              Highest Risk
+            </div>
+            <div className="caption" style={{ color: topRiskCompany ? getRiskColor(normalizeRiskTier(topRiskCompany.riskTier)) : 'var(--muted-foreground)', fontWeight: 500 }}>
+              {topRiskCompany ? `${topRiskCompany.companyNickname} (${topRiskCompany.riskScore})` : '—'}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="caption sm:hidden" style={{ color: 'var(--muted-foreground)' }}>
+            {companies.length} co.
+          </span>
+          <span className="caption" style={{ color: 'var(--muted-foreground)' }}>
+            {expanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+          {companies.length === 0 ? (
+            <div className="py-8 text-center caption" style={{ color: 'var(--muted-foreground)' }}>
+              No companies were returned for this collection.
+            </div>
+          ) : (
+            companies.map((company) => (
+              <CollectionCompanyRow key={company.id} company={company} />
+            ))
+          )}
+
+          <div className="flex flex-col items-start justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 caption"
+              style={{
+                background: 'var(--input-background)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--muted-foreground)',
+              }}
+              onClick={() => alert('Batch PDF export is not integrated yet.')}
+            >
+              <BarChart2 size={12} /> Export Batch PDF
             </button>
+
             <button
-              onClick={handleCreate}
-              className="caption px-3 py-1.5 rounded"
-              style={{ background: 'var(--primary)', borderRadius: 'var(--radius)', color: 'white' }}
+              type="button"
+              onClick={() => {
+                void onStatusChange();
+              }}
+              disabled={updating}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 caption disabled:opacity-60"
+              style={{
+                background: 'var(--input-background)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--muted-foreground)',
+              }}
             >
-              Create Collection
+              <Archive size={12} /> {updating ? 'Saving...' : archiveLabel}
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Active Collections */}
-      <div className="space-y-3">
-        <h3 style={{ fontFamily: 'var(--text-h3-family)', fontSize: 'var(--text-h3-size)', color: 'var(--foreground)' }}>
-          Active Collections ({active.length})
-        </h3>
-        {active.map(col => {
-          const companies = MOCK_COMPANIES.filter(c => col.companyIds.includes(c.id));
-          const avgScore = companies.length > 0 ? Math.round(companies.reduce((s, c) => s + c.riskScore, 0) / companies.length) : 0;
-          const topRisk = companies.sort((a, b) => b.riskScore - a.riskScore)[0];
-          const totalFlags = companies.reduce((s, c) => s + c.priorConduct.length + c.alerts.length, 0);
-          const isExpanded = expandedCol === col.id;
+export function Collections() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    activeBookmarks,
+    archivedBookmarks,
+    isLoading,
+    error,
+    updatingBookmarkIds,
+    refreshBookmarks,
+    updateBookmarkStatus,
+  } = useBookmarks();
+  const [expandedBookmarkId, setExpandedBookmarkId] = useState<number | null>(null);
 
-          return (
-            <div
-              key={col.id}
-              className="rounded-xl border overflow-hidden"
-              style={{ background: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius-card)' }}
-            >
-              {/* Collection Header */}
-              <button
-                onClick={() => setExpandedCol(isExpanded ? null : col.id)}
-                className="w-full flex items-center justify-between p-4 text-left"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className="w-3 h-3 rounded-full shrink-0"
-                    style={{ background: col.color }}
-                  />
-                  <div className="min-w-0">
-                    <div style={{ fontFamily: 'var(--text-h3-family)', fontSize: 'var(--text-h3-size)', color: 'var(--foreground)' }}>
-                      {col.name}
-                    </div>
-                    {col.description && (
-                      <div className="caption mt-0.5 truncate" style={{ color: 'var(--muted-foreground)' }}>
-                        {col.description}
-                      </div>
-                    )}
-                  </div>
-                </div>
+  useEffect(() => {
+    const selectedBookmarkId = Number(searchParams.get('bookmark'));
+    const allBookmarks = [...activeBookmarks, ...archivedBookmarks];
 
-                {/* Summary stats */}
-                <div className="hidden sm:flex items-center gap-4 md:gap-6 mr-4 shrink-0">
-                  <div className="text-right">
-                    <div className="caption" style={{ color: 'var(--muted-foreground)' }}>Companies</div>
-                    <div style={{ fontFamily: 'var(--text-p-family)', fontSize: '15px', color: 'var(--foreground)', fontWeight: 500 }}>
-                      {companies.length}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="caption" style={{ color: 'var(--muted-foreground)' }}>Avg Risk</div>
-                    <div style={{ fontFamily: 'var(--text-p-family)', fontSize: '15px', color: getRiskColor(avgScore >= 81 ? 'critical' : avgScore >= 61 ? 'high' : avgScore >= 31 ? 'medium' : 'low'), fontWeight: 500 }}>
-                      {avgScore || '—'}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="caption" style={{ color: 'var(--muted-foreground)' }}>Total Flags</div>
-                    <div style={{ fontFamily: 'var(--text-p-family)', fontSize: '15px', color: totalFlags > 0 ? 'var(--destructive)' : 'var(--foreground)', fontWeight: 500 }}>
-                      {totalFlags}
-                    </div>
-                  </div>
-                  {topRisk && (
-                    <div className="text-right hidden md:block">
-                      <div className="caption" style={{ color: 'var(--muted-foreground)' }}>Highest Risk</div>
-                      <div className="caption" style={{ color: getRiskColor(topRisk.riskTier), fontWeight: 500 }}>
-                        {topRisk.ticker} ({topRisk.riskScore})
-                      </div>
-                    </div>
-                  )}
-                </div>
+    if (selectedBookmarkId && allBookmarks.some((bookmark) => bookmark.id === selectedBookmarkId)) {
+      setExpandedBookmarkId(selectedBookmarkId);
+      return;
+    }
 
-                {/* Mobile: just show count */}
-                <div className="flex sm:hidden items-center gap-2 mr-2 shrink-0">
-                  <span className="caption" style={{ color: 'var(--muted-foreground)' }}>{companies.length} co.</span>
-                </div>
+    if (expandedBookmarkId && allBookmarks.some((bookmark) => bookmark.id === expandedBookmarkId)) {
+      return;
+    }
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="caption" style={{ color: 'var(--muted-foreground)' }}>
-                    {isExpanded ? '▲' : '▼'}
-                  </span>
-                </div>
-              </button>
+    setExpandedBookmarkId(activeBookmarks[0]?.id ?? archivedBookmarks[0]?.id ?? null);
+  }, [activeBookmarks, archivedBookmarks, expandedBookmarkId, searchParams]);
 
-              {/* Expanded company list */}
-              {isExpanded && (
-                <div className="border-t" style={{ borderColor: 'var(--border)' }}>
-                  {companies.length === 0 ? (
-                    <div className="py-8 text-center caption" style={{ color: 'var(--muted-foreground)' }}>
-                      No companies in this collection yet. Add companies from their detail pages.
-                    </div>
-                  ) : (
-                    <>
-                      {companies.map((company, idx) => {
-                        const lastFY = company.financials.at(-1)!;
-                        return (
-                          <div
-                            key={company.id}
-                            className="flex items-center gap-3 md:gap-4 px-4 py-3 border-b"
-                            style={{ borderColor: 'var(--border)' }}
-                          >
-                            <span className="caption w-5 text-center shrink-0" style={{ color: 'var(--muted-foreground)' }}>
-                              {idx + 1}
-                            </span>
-                            <div
-                              className="w-9 h-9 md:w-10 md:h-10 rounded flex items-center justify-center shrink-0"
-                              style={{ background: `${getRiskColor(company.riskTier)}22`, border: `1px solid ${getRiskColor(company.riskTier)}44`, borderRadius: 'var(--radius)' }}
-                            >
-                              <span style={{ fontFamily: 'var(--text-p-family)', fontSize: '13px', color: getRiskColor(company.riskTier), fontWeight: 500 }}>
-                                {company.riskScore}
-                              </span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span style={{ fontFamily: 'var(--text-p-family)', fontSize: '14px', color: 'var(--foreground)', fontWeight: 500 }}>
-                                  {company.ticker}
-                                </span>
-                                <RiskBadge tier={company.riskTier} size="sm" />
-                              </div>
-                              <div className="caption truncate mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-                                {company.name} · {company.sector}
-                              </div>
-                            </div>
-                            <div className="hidden sm:flex items-center gap-4 md:gap-6">
-                              <div>
-                                <div className="caption" style={{ color: 'var(--muted-foreground)' }}>ETR</div>
-                                <div className="caption" style={{ color: lastFY.etr < 15 ? 'var(--destructive)' : 'var(--foreground)', fontWeight: 500 }}>
-                                  {lastFY.etr.toFixed(1)}%
-                                </div>
-                              </div>
-                              <div>
-                                <div className="caption" style={{ color: 'var(--muted-foreground)' }}>Tax Havens</div>
-                                <div className="caption" style={{ color: company.taxHavenCount > 0 ? 'var(--destructive)' : 'var(--muted-foreground)', fontWeight: company.taxHavenCount > 0 ? 500 : 400 }}>
-                                  {company.taxHavenCount}
-                                </div>
-                              </div>
-                              {company.alerts.length > 0 && (
-                                <div className="flex items-center gap-1 caption" style={{ color: 'var(--destructive)' }}>
-                                  <AlertTriangle size={11} />
-                                  {company.alerts.length} alert{company.alerts.length > 1 ? 's' : ''}
-                                </div>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => navigate(`/company/${company.id}`)}
-                              className="flex items-center gap-1.5 caption px-2.5 md:px-3 py-1.5 rounded shrink-0"
-                              style={{ background: 'var(--input-background)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--muted-foreground)' }}
-                            >
-                              <ArrowUpRight size={12} /> <span className="hidden sm:inline">View</span>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
+  function toggleExpanded(bookmarkId: number) {
+    const nextId = expandedBookmarkId === bookmarkId ? null : bookmarkId;
+    setExpandedBookmarkId(nextId);
 
-                  {/* Collection actions */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 py-3 gap-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="flex items-center gap-1.5 caption px-3 py-1.5 rounded"
-                        style={{ background: 'var(--input-background)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--muted-foreground)' }}
-                        onClick={() => alert('Batch PDF would generate a single report covering all companies in this collection.')}
-                      >
-                        <BarChart2 size={12} /> Export Batch PDF
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => handleArchive(col.id)}
-                      className="flex items-center gap-1.5 caption px-3 py-1.5 rounded"
-                      style={{ background: 'var(--input-background)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--muted-foreground)' }}
-                    >
-                      <Archive size={12} /> Archive Collection
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (nextId) {
+      nextSearchParams.set('bookmark', String(nextId));
+    } else {
+      nextSearchParams.delete('bookmark');
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  }
+
+  return (
+    <div className="space-y-4 p-4 md:space-y-6 md:p-6">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <h1
+            style={{
+              fontFamily: 'var(--text-h1-family)',
+              fontSize: 'var(--text-h1-size)',
+              color: 'var(--foreground)',
+            }}
+          >
+            Collections
+          </h1>
+          <p style={{ color: 'var(--muted-foreground)', marginTop: '4px' }}>
+            Backend-backed bookmarks grouped by active and archived status.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <button
+            type="button"
+            onClick={() => navigate('/watchlist?createCollection=1')}
+            className="flex items-center gap-2 rounded px-3 py-2"
+            style={{ background: 'var(--primary)', borderRadius: 'var(--radius)', color: 'white' }}
+          >
+            <FolderOpen size={14} />
+            <span>New Collection</span>
+          </button>
+          <p className="caption text-right" style={{ color: 'var(--muted-foreground)' }}>
+            Create a new collection from selected Watchlist companies.
+          </p>
+        </div>
       </div>
 
-      {/* Archived Collections */}
-      {archived.length > 0 && (
-        <div className="space-y-3">
-          <h3 style={{ fontFamily: 'var(--text-h3-family)', fontSize: 'var(--text-h3-size)', color: 'var(--muted-foreground)' }}>
-            Archived ({archived.length})
-          </h3>
-          {archived.map(col => (
-            <div
-              key={col.id}
-              className="flex items-center justify-between p-4 rounded-xl border"
-              style={{ background: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius-card)', opacity: 0.6 }}
-            >
-              <div className="flex items-center gap-3">
-                <Archive size={14} style={{ color: 'var(--muted-foreground)' }} />
-                <div>
-                  <div style={{ fontFamily: 'var(--text-p-family)', fontSize: '14px', color: 'var(--muted-foreground)' }}>
-                    {col.name}
-                  </div>
-                  <div className="caption" style={{ color: 'var(--muted-foreground)' }}>
-                    Archived · Created {col.createdAt}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setCollections(prev => prev.map(c => c.id === col.id ? { ...c, status: 'active' as const } : c))}
-                className="caption px-3 py-1.5 rounded"
-                style={{ background: 'var(--input-background)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--muted-foreground)' }}
+      {error && (
+        <div
+          className="rounded-xl border px-4 py-3"
+          style={{
+            background: 'rgba(191, 77, 67, 0.12)',
+            borderColor: 'rgba(191, 77, 67, 0.4)',
+            color: 'rgb(255, 207, 201)',
+          }}
+        >
+          <div>{error}</div>
+          <button
+            type="button"
+            onClick={() => {
+              void refreshBookmarks();
+            }}
+            className="mt-2 inline-flex items-center gap-1.5 caption"
+            style={{ color: 'rgb(255, 207, 201)' }}
+          >
+            <RefreshCcw size={12} /> Retry
+          </button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div
+          className="rounded-xl border px-4 py-10 text-center"
+          style={{ background: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius-card)' }}
+        >
+          <p style={{ color: 'var(--muted-foreground)' }}>Loading collections from `/api/bookmarks`...</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3
+                style={{
+                  fontFamily: 'var(--text-h3-family)',
+                  fontSize: 'var(--text-h3-size)',
+                  color: 'var(--foreground)',
+                }}
               >
-                Restore
+                Active Collections ({activeBookmarks.length})
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  void refreshBookmarks();
+                }}
+                className="inline-flex items-center gap-1.5 caption"
+                style={{ color: 'var(--muted-foreground)' }}
+              >
+                <RefreshCcw size={12} /> Refresh
               </button>
             </div>
-          ))}
-        </div>
+
+            {activeBookmarks.length === 0 ? (
+              <div
+                className="rounded-xl border px-4 py-8 text-center"
+                style={{ background: 'var(--card)', borderColor: 'var(--border)', borderRadius: 'var(--radius-card)' }}
+              >
+                <p style={{ color: 'var(--muted-foreground)' }}>No active collections found.</p>
+              </div>
+            ) : (
+              activeBookmarks.map((bookmark) => (
+                <CollectionCard
+                  key={bookmark.id}
+                  bookmark={bookmark}
+                  expanded={expandedBookmarkId === bookmark.id}
+                  updating={updatingBookmarkIds.includes(bookmark.id)}
+                  archiveLabel="Archive Collection"
+                  onToggle={() => toggleExpanded(bookmark.id)}
+                  onStatusChange={async () => {
+                    await updateBookmarkStatus(bookmark.id, 'Archived');
+                  }}
+                />
+              ))
+            )}
+          </div>
+
+          {archivedBookmarks.length > 0 && (
+            <div className="space-y-3">
+              <h3
+                style={{
+                  fontFamily: 'var(--text-h3-family)',
+                  fontSize: 'var(--text-h3-size)',
+                  color: 'var(--muted-foreground)',
+                }}
+              >
+                Archived ({archivedBookmarks.length})
+              </h3>
+
+              {archivedBookmarks.map((bookmark) => (
+                <CollectionCard
+                  key={bookmark.id}
+                  bookmark={bookmark}
+                  expanded={expandedBookmarkId === bookmark.id}
+                  updating={updatingBookmarkIds.includes(bookmark.id)}
+                  archiveLabel="Restore"
+                  onToggle={() => toggleExpanded(bookmark.id)}
+                  onStatusChange={async () => {
+                    await updateBookmarkStatus(bookmark.id, 'Active');
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

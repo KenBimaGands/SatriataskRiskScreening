@@ -1,13 +1,19 @@
 import { NavLink, useLocation } from 'react-router';
 import {
   LayoutDashboard,
+  LogOut,
   Star,
   FolderOpen,
   Bell,
   Shield,
   X,
 } from 'lucide-react';
-import { MOCK_COMPANIES, MOCK_COLLECTIONS } from '../../data/mockData';
+import { useAuth } from '../../auth/AuthContext';
+import { useBookmarks } from '../../bookmarks/BookmarksContext';
+import { useCompanyCollections } from '../../company-collections/CompanyCollectionsContext';
+import { normalizeCompanyRiskTier } from '../../lib/companyCollections';
+
+const COLLECTION_COLORS = ['#BF4D43', '#D97757', '#207FDE', '#9B87F5', '#4CAF74', '#D4A017'];
 
 const navItems = [
   { to: '/', label: 'Triage Dashboard', icon: LayoutDashboard },
@@ -22,8 +28,21 @@ interface SidebarProps {
 
 export function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
-  const watchlistCount = MOCK_COMPANIES.filter(c => c.isWatchlisted).length;
-  const alertCount = MOCK_COMPANIES.reduce((sum, c) => sum + c.alerts.length, 0);
+  const { user, logout } = useAuth();
+  const { activeBookmarks, isLoading } = useBookmarks();
+  const { companies } = useCompanyCollections();
+  const watchlistCount = companies.filter((company) => {
+    const tier = normalizeCompanyRiskTier(company.riskTier);
+    return tier === 'critical' || tier === 'high';
+  }).length;
+  const alertCount = 0;
+  const initials = user?.fullName
+    ?.split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || user?.username.slice(0, 2).toUpperCase() || 'SA';
+  const displayName = user?.fullName || user?.username || 'SATRIA User';
 
   return (
     <aside
@@ -106,26 +125,36 @@ export function Sidebar({ onClose }: SidebarProps) {
           Collections
         </div>
         <div className="space-y-0.5">
-          {MOCK_COLLECTIONS.filter(c => c.status === 'active').map(col => (
-            <NavLink
-              key={col.id}
-              to={`/collections`}
-              onClick={onClose}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors"
-              style={{ borderRadius: 'var(--radius)', color: 'var(--sidebar-foreground)' }}
-            >
-              <div
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ background: col.color }}
-              />
-              <span className="truncate" style={{ fontFamily: 'var(--text-label-family)', fontSize: 'var(--text-label-size)' }}>
-                {col.name}
-              </span>
-              <span className="caption ml-auto shrink-0" style={{ color: 'var(--muted-foreground)' }}>
-                {col.companyIds.length}
-              </span>
-            </NavLink>
-          ))}
+          {isLoading ? (
+            <div className="px-2.5 py-1.5 caption" style={{ color: 'var(--muted-foreground)' }}>
+              Loading collections...
+            </div>
+          ) : activeBookmarks.length === 0 ? (
+            <div className="px-2.5 py-1.5 caption" style={{ color: 'var(--muted-foreground)' }}>
+              No active collections
+            </div>
+          ) : (
+            activeBookmarks.map((bookmark, index) => (
+              <NavLink
+                key={bookmark.id}
+                to={`/collections?bookmark=${bookmark.id}`}
+                onClick={onClose}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors"
+                style={{ borderRadius: 'var(--radius)', color: 'var(--sidebar-foreground)' }}
+              >
+                <div
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: COLLECTION_COLORS[index % COLLECTION_COLORS.length] }}
+                />
+                <span className="truncate" style={{ fontFamily: 'var(--text-label-family)', fontSize: 'var(--text-label-size)' }}>
+                  {bookmark.name}
+                </span>
+                <span className="caption ml-auto shrink-0" style={{ color: 'var(--muted-foreground)' }}>
+                  {bookmark.companies.length}
+                </span>
+              </NavLink>
+            ))
+          )}
         </div>
       </div>
 
@@ -138,16 +167,29 @@ export function Sidebar({ onClose }: SidebarProps) {
           className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
           style={{ background: 'var(--primary)', borderRadius: '50%' }}
         >
-          <span style={{ fontFamily: 'var(--text-p-family)', fontSize: '11px', color: 'white', fontWeight: 500 }}>BS</span>
+          <span style={{ fontFamily: 'var(--text-p-family)', fontSize: '11px', color: 'white', fontWeight: 500 }}>{initials}</span>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div style={{ fontFamily: 'var(--text-p-family)', fontSize: '13px', color: 'var(--foreground)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Budi Santoso
+            {displayName}
           </div>
           <div className="caption" style={{ color: 'var(--muted-foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            DJP Transfer Pricing
+            {user?.email || 'Authenticated session'}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            logout();
+            onClose?.();
+          }}
+          className="rounded p-1.5 transition-colors"
+          style={{ color: 'var(--muted-foreground)' }}
+          aria-label="Log out"
+          title="Log out"
+        >
+          <LogOut size={16} />
+        </button>
       </div>
     </aside>
   );
