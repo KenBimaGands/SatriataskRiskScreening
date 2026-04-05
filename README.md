@@ -224,23 +224,31 @@ They are sequential steps in the same workflow — not competing products.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/satria.git
-cd satria
+git clone https://github.com/your-org/satria-frontend.git
+cd satria-frontend
 
-# Install dependencies
-npm install          # frontend
-pip install -r requirements.txt --break-system-packages  # backend
+# Install frontend dependencies
+npm install
 
-# Set up environment variables
+# Optional: copy environment variables for overrides
 cp .env.example .env
-# Fill in: DATABASE_URL, OPENCORPORATES_API_KEY, NEWS_API_KEY
+# In local development, leave both values commented out to use localhost:5000
 
-# Run database migrations
-python manage.py migrate
+# Start the frontend dev server
+npm run dev
+```
 
-# Start development servers
-npm run dev          # frontend (port 3000)
-python manage.py runserver  # backend (port 8000)
+### Backend connection modes
+
+```bash
+# Option 1: localhost development against a local backend (recommended)
+# Leave VITE_API_BASE_URL unset and Vite will proxy /api/* to http://localhost:5000
+
+# Option 2: direct browser calls to the hosted production backend
+VITE_API_BASE_URL=https://backend-satria.onrender.com
+
+# Option 3: override the dev proxy target
+VITE_DEV_PROXY_TARGET=http://localhost:5000
 ```
 
 ---
@@ -248,20 +256,12 @@ python manage.py runserver  # backend (port 8000)
 ## Environment Variables
 
 ```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/satria
+# Optional override for direct browser calls.
+# In development, leave this unset to avoid CORS and use the Vite proxy.
+VITE_API_BASE_URL=https://backend-satria.onrender.com
 
-# External APIs
-OPENCORPORATES_API_KEY=your_key_here
-NEWS_API_KEY=your_key_here
-
-# Optional (V2)
-OCCRP_ALEPH_API_KEY=your_key_here
-
-# App config
-SECRET_KEY=your_secret_key
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
+# Optional override for the localhost dev proxy target.
+VITE_DEV_PROXY_TARGET=http://localhost:5000
 ```
 
 ---
@@ -269,39 +269,16 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 ## Project Structure
 
 ```
-satria/
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Dashboard/          # F-01 Company listing + risk ranking
-│   │   │   ├── CompanyDetail/      # F-08–F-20 Diagnosis features
-│   │   │   ├── OwnershipGraph/     # F-16 Network visualization
-│   │   │   ├── Watchlist/          # F-05 Watchlist
-│   │   │   ├── Collections/        # F-06 Bookmark collections
-│   │   │   ├── Annotations/        # F-23 Investigator layer
-│   │   │   └── ReportGenerator/    # F-26 PDF export
-│   │   ├── pages/
-│   │   └── utils/
-├── backend/
-│   ├── api/
-│   │   ├── companies/              # Company data + risk scores
-│   │   ├── signals/                # Detection signal calculators
-│   │   ├── ownership/              # Graph builder
-│   │   ├── reports/                # PDF generation
-│   │   └── users/                  # Watchlist, collections, annotations
-│   ├── ingestion/
-│   │   ├── idx_scraper.py          # IDX annual report downloader
-│   │   ├── opencorporates.py       # Registry API client
-│   │   ├── icij_matcher.py         # Leaked database matching
-│   │   └── news_fetcher.py         # News API + NLP filter
-│   └── scoring/
-│       ├── zscore_engine.py        # Statistical anomaly detection
-│       ├── risk_calculator.py      # Weighted score aggregation
-│       └── nlp_extractor.py        # Footnote keyword extraction
-├── docs/
-│   ├── PRD.docx                    # Product Requirements Document
-│   ├── feature_spec.docx           # Technical feature specification
-│   └── api_reference.md            # API documentation
+satria-frontend/
+├── src/
+│   ├── app/
+│   │   ├── components/             # Screens and shared UI
+│   │   ├── lib/                    # API client and data helpers
+│   │   └── data/                   # Mock and seed-like frontend data
+│   ├── styles/                     # Fonts and global styling
+│   └── imports/                    # Product documents and imported assets
+├── public/                         # Static assets
+├── vite.config.ts                  # Frontend build and dev proxy config
 └── README.md
 ```
 
