@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AnalysisRecomendationAPIInterface, useFetchData } from '../lib/api-connection';
+
 import { useNavigate, useParams } from 'react-router';
 import {
   AlertTriangle,
@@ -284,7 +286,11 @@ export function CompanyDetail() {
     setAnnotations(detailCompany.annotations);
   }, [detailCompany]);
 
-  if (isLoading) {
+  const { data, err, isLoading: isLoad } = useFetchData<AnalysisRecomendationAPIInterface>("/analysis/recommendation/AALI");
+
+  const nextStepData: AnalysisRecomendationAPIInterface = data;
+
+  if (isLoading || isLoad) {
     return (
       <div className="p-4 md:p-6">
         <div
@@ -1098,68 +1104,63 @@ export function CompanyDetail() {
               F-25 · Recommended Next Actions
             </h4>
             <div className="space-y-2">
-              {[
-                detailCompany.riskScore >= 81 && {
-                  action: 'Escalate to formal audit referral under PMK-213/PMK.03/2016 (Transfer Pricing Documentation)',
-                  urgency: 'critical',
-                  ref: 'PMK-213/PMK.03/2016, Pasal 8',
-                },
-                detailCompany.impliedRPRate > detailCompany.biRate * 2 && {
-                  action: 'Issue information request (SP2) for RP loan documentation — verify arm’s length interest rate against comparable uncontrolled transactions',
-                  urgency: 'high',
-                  ref: 'PMK-213/PMK.03/2016, Pasal 12',
-                },
-                detailCompany.taxHavenCount > 0 && {
-                  action: 'File MLAT request for beneficial ownership disclosure of identified tax haven entities',
-                  urgency: 'high',
-                  ref: 'UU No.1/2006 tentang MLAT',
-                },
-                detailCompany.mysteryEntities.length > 0 && {
-                  action: 'Cross-reference mystery entities with offshore and leaked-document datasets for corroboration',
-                  urgency: 'medium',
-                  ref: 'Internal procedure SOP-TP-04',
-                },
-                {
-                  action: 'Request 5-year Master File and Local File documentation package for manual analyst review',
-                  urgency: 'medium',
-                  ref: 'PMK-213/PMK.03/2016, Pasal 8',
-                },
-              ]
-                .filter(Boolean)
-                .map((item, index) => {
-                  const actionItem = item as { action: string; urgency: 'critical' | 'high' | 'medium'; ref: string };
-                  const color =
-                    actionItem.urgency === 'critical'
-                      ? 'var(--destructive)'
-                      : actionItem.urgency === 'high'
-                        ? '#D4A017'
-                        : 'var(--accent)';
+              {/* nyusahin ajg */}
+              {data.recommendations.map((d, idx) => {
+                const color =
+                  d.status.includes('Critical')
+                    ? 'var(--destructive)'
+                    : d.status.includes('High')
+                      ? '#D4A017'
+                      : 'var(--accent)';
 
-                  return (
-                    <div
-                      key={`${actionItem.ref}-${index}`}
-                      className="flex items-start gap-3 rounded p-3"
-                      style={{ background: 'var(--input-background)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${color}` }}
-                    >
-                      <div className="mt-0.5">
-                        <span
-                          className="rounded px-1.5 py-0.5 caption"
-                          style={{ background: `${color}15`, color, borderRadius: 'var(--radius-sm)', textTransform: 'uppercase', fontSize: '10px', fontWeight: 500 }}
-                        >
-                          {actionItem.urgency}
-                        </span>
-                      </div>
-                      <div>
-                        <p style={{ fontFamily: 'var(--text-p-family)', fontSize: '13px', color: 'var(--foreground)', lineHeight: 1.5 }}>
-                          {actionItem.action}
-                        </p>
-                        <div className="caption mt-1 flex items-center gap-1" style={{ color: 'var(--muted-foreground)' }}>
-                          <FileText size={10} /> {actionItem.ref}
-                        </div>
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 p-3 rounded"
+                    style={{
+                      background: 'var(--input-background)',
+                      borderRadius: 'var(--radius)',
+                      borderLeft: `3px solid ${color}`,
+                    }}
+                  >
+                    <div className="mt-0.5">
+                      <span
+                        className="caption px-1.5 py-0.5 rounded"
+                        style={{
+                          background: `${color}15`,
+                          color,
+                          borderRadius: 'var(--radius-sm)',
+                          textTransform: 'uppercase',
+                          fontSize: '10px',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {d.status}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p
+                        style={{
+                          fontFamily: 'var(--text-p-family)',
+                          fontSize: '13px',
+                          color: 'var(--foreground)',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {d.recommendation}
+                      </p>
+
+                      <div
+                        className="caption mt-1 flex items-center gap-1"
+                        style={{ color: 'var(--muted-foreground)' }}
+                      >
+                        <FileText size={10} /> {d.code} - {d.year}
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
