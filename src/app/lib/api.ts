@@ -1,7 +1,11 @@
 const DEFAULT_API_BASE_URL = 'https://backend-satria.onrender.com';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '') ?? DEFAULT_API_BASE_URL;
+export const API_BASE_URL = configuredApiBaseUrl
+  ? configuredApiBaseUrl.replace(/\/+$/, '')
+  : import.meta.env.DEV
+    ? ''
+    : DEFAULT_API_BASE_URL;
 
 export interface ApiError extends Error {
   status?: number;
